@@ -3,7 +3,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <algorithm> 
-
+#include <string>
+#include <iostream>
+#include <fstream>
+#include <sstream>
+#include <vector>
 void send_recv_matrix(int* sCount, int* rCount, int* prefix_prev, int recvLen, MPI_Comm comm)
 {
     int rank, p;
@@ -265,21 +269,55 @@ int main(int argc, char *argv[]){
 
     if (world_rank == 0){
         // If command line arguments is invalid: error
-        // if (argc != 2){
-        //     printf("Error: invalid input!\n");
-        //     exit(0);
-        // }
+         if (argc != 3){
+             printf("Error: invalid input!\n");
+             exit(0);
+         }
+         std::ifstream inputF;
+         inputF.open(argv[1]);
+         if (inputF.fail())   //checking whether the file is open
+         {
+             std::cout << "Input file failed to open."<< std::endl;
+             exit(0);
+         }
+         std::string temp;
+         if (!getline(inputF, temp))
+         {
+             std::cout << "Invalid n value in input file.\n"<< std::endl;
+             exit(0);
+         }
+         n = stoi(temp);
+         if (!getline(inputF, temp))
+         {
+             std::cout << "Invalid numbers in input file.\n"<< std::endl;
+             exit(0);
+         }
+         inputF.close();
+         std::stringstream ss(temp);
+         std::vector<int> numbers;
+         int x;
+         while (ss >> x) {
+             numbers.push_back(x);
+         }
+         arr = new int(n);
+         for (int i = 0; i < n; i++) {
+             arr[i] = numbers[i];
+         }
+
         // Obtain input value n
+        /*
         n = 16;
         arr = new int(n);
         for (int i = 0; i < n; i++) {
             arr[i] =(int) rand() % 100;
         }
-
+        
         for (int i = 0; i < n; i++) {
             printf("%d ", arr[i]);
         }
-        printf("\n");  
+        printf("\n"); 
+        exit(0);
+        */ 
     }
 
     // Use MPI_Wtime to time the run-time of the program
