@@ -8,6 +8,8 @@
 #include <fstream>
 #include <sstream>
 #include <vector>
+#include <numeric>
+
 void send_recv_matrix(int* sCount, int* rCount, int* prefix_prev, int recvLen, MPI_Comm comm)
 {
     int rank, p;
@@ -87,7 +89,37 @@ int partition(int *arr, int low, int high, int pivot) {
     }
     return (i+1);
 }
+std::vector<int> collectResult(int *subVec, MPI_Comm comm) {
+    int rank;
+    int nPro;
+    MPI_Comm_rank(comm, &rank);
+    MPI_Comm_size(comm, &nPro);
+    int subLen = sizeof(subVec) / sizeof(subVec[0]);//subVec.size();
+   
+    int nNumber;
+    std::vector<int> returnValue;
+    if (rank == 0) {
+        std::vector<int> Allsizes(nPro);
+        MPI_Gather(&subLen, 1, MPI_INT, &Allsizes[0], 1, MPI_INT, 0, comm);
+        int sum_of_elems = std::accumulate(Allsizes.begin(), Allsizes.end(), 0);
+        returnValue.resize(sum_of_elems);
+        // Calculate displacements
+        int *displsmts;
+        displsmts = new int(nPro);
+        displsmts[0] = 0;
+        for (int i = 1; i < nPro; i++) {
+            displsmts[i] = displsmts[i-1] + Allsizes[i-1];
+        }
 
+        // gather all the data to the root (0)
+        MPI_Gatherv(&subVec[0], subLen, MPI_INT, &returnValue[0], &Allsizes[0], &displsmts[0], MPI_INT, 0, comm);
+    } else {
+        MPI_Gather(&subLen, 1, MPI_INT, NULL, 1, MPI_INT, 0, comm);
+        MPI_Gatherv(&subVec[0], subLen, MPI_INT,
+                    NULL, NULL, NULL, MPI_INT, 0, comm);
+    }   
+    return returnValue; 
+}
 // Recursive function
 int quicksort(int *arr, int subsize, int n, MPI_Comm comm) {
 
@@ -395,7 +427,16 @@ int main(int argc, char *argv[]){
     // printf("\n");
     
     if (world_rank == 0){ double end = MPI_Wtime();}  
-    
+    std::vector<int> sortedArray;
+    int nMid = sizeof(subarr) / sizeof(subarr[0]);
+    std::vector<int> subSend(subarr, subarr + nMid);
+    sortedArray = collectResult(subarr, MPI_COMM_WORLD);    
+    if (world_rank == 0)
+    { 
+        for (int i = 0; i < subsize; i++) {
+            printf("i-%d:%d ", i, subarr[i]);
+        }
+    }
     // free the memory
     if (world_rank == 0) {
         free(arr);
