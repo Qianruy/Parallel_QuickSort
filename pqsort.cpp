@@ -89,6 +89,8 @@ int partition(int *arr, int low, int high, int pivot) {
     }
     return (i+1);
 }
+
+
 std::vector<int> collectResult(int *subVec, MPI_Comm comm) {
     int rank;
     int nPro;
@@ -105,7 +107,7 @@ std::vector<int> collectResult(int *subVec, MPI_Comm comm) {
         returnValue.resize(sum_of_elems);
         // Calculate displacements
         int *displsmts;
-        displsmts = new int(nPro);
+        displsmts = new int[nPro];
         displsmts[0] = 0;
         for (int i = 1; i < nPro; i++) {
             displsmts[i] = displsmts[i-1] + Allsizes[i-1];
@@ -113,6 +115,7 @@ std::vector<int> collectResult(int *subVec, MPI_Comm comm) {
 
         // gather all the data to the root (0)
         MPI_Gatherv(&subVec[0], subLen, MPI_INT, &returnValue[0], &Allsizes[0], &displsmts[0], MPI_INT, 0, comm);
+
     } else {
         MPI_Gather(&subLen, 1, MPI_INT, NULL, 1, MPI_INT, 0, comm);
         MPI_Gatherv(&subVec[0], subLen, MPI_INT,
@@ -120,6 +123,8 @@ std::vector<int> collectResult(int *subVec, MPI_Comm comm) {
     }   
     return returnValue; 
 }
+
+
 // Recursive function
 int quicksort(int *arr, int subsize, int n, MPI_Comm comm) {
 
@@ -134,11 +139,11 @@ int quicksort(int *arr, int subsize, int n, MPI_Comm comm) {
     if (p == 1) {
         std::sort(arr, arr + subsize);
         
-        printf("rank %d after serial sort: ", rank);
-        for (int i = 0; i < subsize; i++) {
-            printf("%d ", arr[i]);
-        }
-        printf("\n\n");
+        // printf("rank %d after serial sort: ", rank);
+        // for (int i = 0; i < subsize; i++) {
+        //     printf("%d ", arr[i]);
+        // }
+        // printf("\n\n");
 
         return subsize;
     }
@@ -156,10 +161,6 @@ int quicksort(int *arr, int subsize, int n, MPI_Comm comm) {
     // Use MPI_Bcast function to broadcast pivot to all processors
     MPI_Bcast(&pivot, 1, MPI_INT, proc, comm);
 
-    // ?? broadcast is blocking
-    // Wait for all clusters to reach this point 
-    // MPI_Barrier(comm);
-    
     // print the pivot on each process
     // printf("pivot for rank %d: %d\n", rank, pivot);
 
@@ -269,7 +270,17 @@ int quicksort(int *arr, int subsize, int n, MPI_Comm comm) {
     // Alltoall data transfer
     int tempData[newLen];
     MPI_Alltoallv(&arr[0], sCount, sDispl, MPI_INT, &tempData[0], rCount, rDispl, MPI_INT, comm);
-    arr = tempData;
+    
+    // deep copy
+    for (int i = 0; i < newLen; i++) {
+        arr[i] = tempData[i];
+    }
+
+    // printf("rank %d during recursion: ", rank);
+    // for (int i = 0; i < newLen; i++) {
+    //     printf("%d ", arr[i]);
+    // }
+    // printf("\n\n");
 
     // Split communicators
     MPI_Comm newComm;
@@ -281,7 +292,6 @@ int quicksort(int *arr, int subsize, int n, MPI_Comm comm) {
     MPI_Comm_free(&newComm);
 
     return l;
-    // return 0;
 }
 
 int main(int argc, char *argv[]){
@@ -331,7 +341,7 @@ int main(int argc, char *argv[]){
          while (ss >> x) {
              numbers.push_back(x);
          }
-         arr = new int(n);
+         arr = new int[n];
          for (int i = 0; i < n; i++) {
              arr[i] = numbers[i];
          }
@@ -375,7 +385,7 @@ int main(int argc, char *argv[]){
 
     printf("subsize for rank %d: %d\n", world_rank, subsize);
 
-    subarr = new int(subsize);
+    subarr = new int[subsize];
     MPI_Scatterv(arr, subsize_arr, displs, MPI_INT, subarr, subsize_arr[world_rank], MPI_INT, 0, MPI_COMM_WORLD);
 
     // print the subarray on each process
@@ -389,6 +399,12 @@ int main(int argc, char *argv[]){
     int newL = quicksort(subarr, subsize, n, MPI_COMM_WORLD);
 
     // MPI_Barrier(MPI_COMM_WORLD);
+
+    printf("rank %d after recursion with newL %d: \n", world_rank, newL);
+    for (int i = 0; i < newL; i++) {
+        printf("%d ", subarr[i]);
+    }
+    printf("\n\n");
 
     // printf("rank %d : ", world_rank);
     // for (int i = 0; i < newL; i++) {
@@ -426,22 +442,24 @@ int main(int argc, char *argv[]){
     // }
     // printf("\n");
     
-    if (world_rank == 0){ double end = MPI_Wtime();}  
-    std::vector<int> sortedArray;
-    int nMid = sizeof(subarr) / sizeof(subarr[0]);
-    std::vector<int> subSend(subarr, subarr + nMid);
-    sortedArray = collectResult(subarr, MPI_COMM_WORLD);    
-    if (world_rank == 0)
-    { 
-        for (int i = 0; i < subsize; i++) {
-            printf("i-%d:%d ", i, subarr[i]);
-        }
-    }
+    // if (world_rank == 0){ double end = MPI_Wtime();}  
+    // std::vector<int> sortedArray;
+    // int nMid = sizeof(subarr) / sizeof(subarr[0]);
+    // std::vector<int> subSend(subarr, subarr + nMid);
+    // sortedArray = collectResult(subarr, MPI_COMM_WORLD);    
+    // if (world_rank == 0)
+    // { 
+    //     for (int i = 0; i < subsize; i++) {
+    //         printf("i-%d:%d ", i, subarr[i]);
+    //     }
+    // }
+
+
     // free the memory
-    if (world_rank == 0) {
-        free(arr);
-    }
-    free(subarr);
+    // if (world_rank == 0) {
+    //     free(arr);
+    // }
+    // free(subarr);
 
     // Finalize the MPI environment. No more MPI calls can be made after this
     MPI_Finalize();
