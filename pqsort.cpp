@@ -11,8 +11,7 @@
 #include <numeric>
 #include <iomanip>
 
-void send_recv_matrix(int* sCount, int* rCount, int* prefix_prev, int recvLen, MPI_Comm comm)
-{
+void send_recv_matrix(int* sCount, int* rCount, int* prefix_prev, int recvLen, MPI_Comm comm) {
     int rank, p;
     MPI_Comm_rank(comm, &rank);
     MPI_Comm_size(comm, &p);
@@ -80,11 +79,12 @@ void send_recv_matrix(int* sCount, int* rCount, int* prefix_prev, int recvLen, M
 
 
 // Return the size of smaller subarray
-int partition(std::vector<int> &arr, int low, int high, int pivot) {
+int partition(std::vector<int> &arr, int low, int high, int pivot, int &equal_size) {
     int i = low - 1;
     for (int j = low; j < high; j++) {
         if (arr[j] <= pivot) {
             i++;
+            equal_size += (arr[j] == pivot? 1 : 0);
             std::swap(arr[j], arr[i]);
         }
     }
@@ -148,14 +148,14 @@ int quicksort(std::vector<int> &arr, int subsize, int n, MPI_Comm comm) {
 
     // num of processors > num of numbers
     if (p > commLen) {
-        if (rank == 0) {
-            printf("rank is 0.\n");
-            std::sort(arr.begin(), arr.end());
-            return subsize;
-        } else {
-            printf("rank is not 0.\n");
+        MPI_Comm newComm;
+        MPI_Comm_split(comm, rank < commLen, rank, &newComm);  
+        if (rank >= commLen) {
             return 0;
         }
+        int debug = quicksort(arr, subsize, n, newComm);
+        MPI_Comm_free(&newComm);
+        return debug;
     }
 
     // Serial sorting for p = 1
@@ -177,7 +177,7 @@ int quicksort(std::vector<int> &arr, int subsize, int n, MPI_Comm comm) {
     if (rank == 0) { proc = rand() % p; }
     MPI_Bcast(&proc, 1, MPI_INT, 0, comm);
     if (rank == proc) {
-        pivot = arr[rand() % (subsize - 1)];
+        pivot = arr[rand() % subsize];
         // printf("pivot: %d\n", pivot);
     }
     
@@ -188,8 +188,14 @@ int quicksort(std::vector<int> &arr, int subsize, int n, MPI_Comm comm) {
     // printf("pivot for rank %d: %d\n", rank, pivot);
 
     // local partition
-    int left_size = partition(arr, 0, subsize, pivot);
+    int equal_size = 0;
+    int left_size = partition(arr, 0, subsize, pivot, equal_size);
     int right_size = subsize - left_size;
+    
+    // check if element is all equal
+    int equal_total = 0;
+    MPI_Allreduce(&equal_size, &equal_total, 1, MPI_INT, MPI_SUM, comm);
+    if (equal_total == n) { return subsize; }
 
     // Wait for all clusters to reach this point 
     MPI_Barrier(comm);
@@ -231,7 +237,7 @@ int quicksort(std::vector<int> &arr, int subsize, int n, MPI_Comm comm) {
     int left_num = prefix_left[p - 1];
     int right_num = prefix_right[p - 1];
 
-    int p_left = (int)round((left_num * p)/(left_num + right_num));
+    int p_left = (int)round((left_num * p)/ (left_num + right_num));
     if (p_left == 0 && left_num > 0) { p_left++; }
     else if (p_left == p && right_num > 0) { p_left--; }
     int p_right = p - p_left;
@@ -318,7 +324,7 @@ int quicksort(std::vector<int> &arr, int subsize, int n, MPI_Comm comm) {
     printf("After spliting \n\n");
 
     // recursion
-    int l = quicksort(arr, newLen, n, newComm);
+    int l = quicksort(arr, newLen, left_num + right_num, newComm);
 
     MPI_Comm_free(&newComm);
 
