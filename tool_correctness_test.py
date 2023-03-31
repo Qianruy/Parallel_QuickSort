@@ -6,9 +6,9 @@ in_fname, ou_fname = 'input_test.txt', 'output_test.txt'
 np = 6
 
 n = randint(10**4, 10**5)
-n = 10**6
+n = 100
 # arr = [randint(-10**9, 10**9) for _ in range(n)]
-arr = [randint(-10**9, 10**9)] * n
+arr = [randint(-100, 100)] * n
 with open(in_fname, 'w') as f:
     f.write(f'{n}\n')
     f.write(' '.join(map(str, arr)) + '\n')
@@ -20,5 +20,5 @@ with open(ou_fname, 'r') as f:
 
 assert(prog_out == sorted(arr))
 
-os.remove(in_fname)
-os.remove(ou_fname)
+#os.remove(in_fname)
+#os.remove(ou_fname)

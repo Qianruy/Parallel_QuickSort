@@ -93,7 +93,6 @@ std::vector<int> collectResult(std::vector<int> &subVec, int subLen, MPI_Comm co
     int nPro;
     MPI_Comm_rank(comm, &rank);
     MPI_Comm_size(comm, &nPro);
-    printf("***collect_rank_%d_subLen:%d\n", rank, subLen);
     std::vector<int> returnValue;
 
     // MPI_Barrier(comm);
@@ -102,7 +101,6 @@ std::vector<int> collectResult(std::vector<int> &subVec, int subLen, MPI_Comm co
         std::vector<int> Allsizes(nPro);
         MPI_Gather(&subLen, 1, MPI_INT, &Allsizes[0], 1, MPI_INT, 0, comm);
         int sum_of_elems = std::accumulate(Allsizes.begin(), Allsizes.end(), 0);
-        printf("sum_of_elements:%d#############\n", sum_of_elems);
         returnValue.resize(sum_of_elems);
         // Calculate displacements
         int *displsmts;
@@ -114,13 +112,10 @@ std::vector<int> collectResult(std::vector<int> &subVec, int subLen, MPI_Comm co
 
         // gather all the data to the root (0)
         MPI_Gatherv(&subVec[0], subLen, MPI_INT, &returnValue[0], &Allsizes[0], &displsmts[0], MPI_INT, 0, comm);
-        // printf("rank %d okk2\n", rank);
     } else {
-        // printf("rank %d okk\n", rank);
         MPI_Gather(&subLen, 1, MPI_INT, NULL, 1, MPI_INT, 0, comm);
         MPI_Gatherv(&subVec[0], subLen, MPI_INT,
                     NULL, NULL, NULL, MPI_INT, 0, comm);
-        // printf("rank %d okk2\n", rank);
     }   
     return returnValue; 
 }
@@ -152,13 +147,6 @@ int quicksort(std::vector<int> &arr, int subsize, int n, MPI_Comm comm) {
     // Serial sorting for p = 1
     if (p == 1) {
         std::sort(arr.begin(), arr.end());
-        
-        printf("rank %d after serial sort: ", rank);
-        for (int i = 0; i < subsize; i++) {
-            printf("%d ", arr[i]);
-        }
-        printf("\n\n");
-
         return subsize;
     }
 
@@ -169,7 +157,6 @@ int quicksort(std::vector<int> &arr, int subsize, int n, MPI_Comm comm) {
     MPI_Bcast(&proc, 1, MPI_INT, 0, comm);
     if (rank == proc) {
         pivot = arr[rand() % subsize];
-        // printf("pivot: %d\n", pivot);
     }
     
     // Use MPI_Bcast function to broadcast pivot to all processors
@@ -201,18 +188,12 @@ int quicksort(std::vector<int> &arr, int subsize, int n, MPI_Comm comm) {
     else if (p_left == p && right_num > 0) { p_left--; }
     int p_right = p - p_left;
 
-    printf("num left: %d, num right: %d, rank: %d\n", left_num, right_num, rank);
-    
-    printf("p left: %d, p right: %d\n", p_left, p_right);
-    
     int newLen;
     if (rank < p_left) {
         newLen = (rank < (left_num % p_left)) ? (left_num / p_left + 1) : (left_num / p_left);
     } else {
         newLen = ((rank - p_left) < (right_num % p_right)) ? (right_num / p_right + 1) : (right_num / p_right);
     }
-    printf("newLen for rank %d: %d\n",rank, newLen);
-
     int sCount[p];
     int rCount[p];
     int small_sCount[p];
@@ -261,8 +242,6 @@ int quicksort(std::vector<int> &arr, int subsize, int n, MPI_Comm comm) {
     // Split communicators
     MPI_Comm newComm;
     MPI_Comm_split(comm, (rank < p_left), rank, &newComm);
-
-    printf("After spliting \n\n");
 
     // recursion
     int l = quicksort(arr, newLen, left_num + right_num, newComm);
@@ -324,20 +303,6 @@ int main(int argc, char *argv[]){
             arr[i] = numbers[i];
         }
 
-        // Obtain input value n
-        /*
-        n = 16;
-        arr = new int(n);
-        for (int i = 0; i < n; i++) {
-            arr[i] =(int) rand() % 100;
-        }
-        
-        for (int i = 0; i < n; i++) {
-            printf("%d ", arr[i]);
-        }
-        printf("\n"); 
-        exit(0);
-        */ 
     }
 
     // Use MPI_Wtime to time the run-time of the program
@@ -361,18 +326,9 @@ int main(int argc, char *argv[]){
     // calculate the size of the subarray for each process
     subsize = (world_rank < (n % world_size)) ? (n / world_size + 1) : (n / world_size);
 
-    printf("subsize for rank %d: %d\n", world_rank, subsize);
-
     std::vector<int> subarr(subsize);
 
     MPI_Scatterv(arr, subsize_arr, displs, MPI_INT, &subarr[0], subsize_arr[world_rank], MPI_INT, 0, MPI_COMM_WORLD);
-
-    // print the subarray on each process
-    printf("rank %d received: ", world_rank);
-    for (int i = 0; i < subsize; i++) {
-        printf("%d ", subarr[i]);
-    }
-    printf("\n");
 
     // Sort recursively
     int newL = quicksort(subarr, subsize, n, MPI_COMM_WORLD);
@@ -387,8 +343,7 @@ int main(int argc, char *argv[]){
     MPI_Barrier(MPI_COMM_WORLD);
 
     if (world_rank == 0) { 
-      int allSize = n;//world_size * (world_size + 1) / 2; 
-      printf("Allsize:%d \n", allSize);
+      int allSize = n;
       std::ofstream myfile;
       myfile.open(argv[2]);
       for (int i = 0; i < allSize - 1; i++) {
@@ -401,7 +356,6 @@ int main(int argc, char *argv[]){
       myfile << std::setprecision(6);
       myfile <<  totaltime <<std::endl;
       myfile.close();
-
       printf("Output created\n");
     }
 
