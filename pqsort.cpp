@@ -15,7 +15,7 @@ void send_recv_matrix(int* sCount, int* rCount, int* prefix_prev, int recvLen, M
     int rank, p;
     MPI_Comm_rank(comm, &rank);
     MPI_Comm_size(comm, &p);
-
+    
     int prefix_new[p];
     int tmp_state;
 
@@ -36,8 +36,6 @@ void send_recv_matrix(int* sCount, int* rCount, int* prefix_prev, int recvLen, M
     while (prefix_new[end] < prefix_prev[rank]) {
         end++;
     }
-
-    // printf("rank %d front %d end %d \n", rank, front, end);
 
     // SendCounts array for current rank
     for (int i = 0; i < front; i++) {
@@ -77,20 +75,17 @@ void send_recv_matrix(int* sCount, int* rCount, int* prefix_prev, int recvLen, M
     return;
 }
 
-
-// Return the size of smaller subarray
-int partition(std::vector<int> &arr, int low, int high, int pivot, int &equal_size) {
-    int i = low - 1;
-    for (int j = low; j < high; j++) {
-        if (arr[j] <= pivot) {
-            i++;
-            equal_size += (arr[j] == pivot? 1 : 0);
-            std::swap(arr[j], arr[i]);
+int partition(std::vector<int> &arr, int low, int high, int pivot) {
+    int i = low - 1, j = high;
+    while (true) {
+        do { i++; } while (i < high && arr[i] < pivot );
+        do { j--; } while (j >= low && arr[j] > pivot); 
+        if (i >= j) {
+            return j;
         }
-    }
-    return (i+1);
+        std::swap(arr[i], arr[j]); 
+    } 
 }
-
 
 // Organize result array 
 std::vector<int> collectResult(std::vector<int> &subVec, int subLen, MPI_Comm comm) {
@@ -117,8 +112,6 @@ std::vector<int> collectResult(std::vector<int> &subVec, int subLen, MPI_Comm co
             displsmts[i] = displsmts[i-1] + Allsizes[i-1];
         }
 
-        // printf("rank %d okk\n", rank);
-
         // gather all the data to the root (0)
         MPI_Gatherv(&subVec[0], subLen, MPI_INT, &returnValue[0], &Allsizes[0], &displsmts[0], MPI_INT, 0, comm);
         // printf("rank %d okk2\n", rank);
@@ -135,9 +128,6 @@ std::vector<int> collectResult(std::vector<int> &subVec, int subLen, MPI_Comm co
 
 // Recursive function
 int quicksort(std::vector<int> &arr, int subsize, int n, MPI_Comm comm) {
-
-    // printf("\n -------- Start Recursive function------\n");
-
     // Get the number and rank of processes
     int p, rank;
     MPI_Comm_size(comm, &p);
@@ -151,6 +141,7 @@ int quicksort(std::vector<int> &arr, int subsize, int n, MPI_Comm comm) {
         MPI_Comm newComm;
         MPI_Comm_split(comm, rank < commLen, rank, &newComm);  
         if (rank >= commLen) {
+            MPI_Comm_free(&newComm);
             return 0;
         }
         int debug = quicksort(arr, subsize, n, newComm);
@@ -184,27 +175,12 @@ int quicksort(std::vector<int> &arr, int subsize, int n, MPI_Comm comm) {
     // Use MPI_Bcast function to broadcast pivot to all processors
     MPI_Bcast(&pivot, 1, MPI_INT, proc, comm);
 
-    // print the pivot on each process
-    // printf("pivot for rank %d: %d\n", rank, pivot);
-
     // local partition
-    int equal_size = 0;
-    int left_size = partition(arr, 0, subsize, pivot, equal_size);
+    int left_size = partition(arr, 0, subsize, pivot) + 1;
     int right_size = subsize - left_size;
-    
-    // check if element is all equal
-    int equal_total = 0;
-    MPI_Allreduce(&equal_size, &equal_total, 1, MPI_INT, MPI_SUM, comm);
-    if (equal_total == n) { return subsize; }
 
     // Wait for all clusters to reach this point 
     MPI_Barrier(comm);
-
-    // printf("rank %d after partition: ", rank);
-    // for (int i = 0; i < subsize; i++) {
-    //     printf("%d ", arr[i]);
-    // }
-    // printf("\n\n");
 
     // preifx sum for left array size and right array size
     int prefix_left[p];
@@ -212,26 +188,9 @@ int quicksort(std::vector<int> &arr, int subsize, int n, MPI_Comm comm) {
     int tmp_state;
     MPI_Scan(&left_size, &tmp_state, 1, MPI_INT, MPI_SUM, comm);
     MPI_Allgather(&tmp_state, 1, MPI_INT, prefix_left, 1, MPI_INT, comm);
-    // printf("rank %d received left size!\n", rank);
-    // if (rank == 0) {
-    //     printf("prefix sum of left size: ");
-    //     for (int i = 0; i < p; i++) {
-    //         printf("%d ", prefix_left[i]);
-    //     }
-    //     printf("\n\n");
-    // }
 
     MPI_Scan(&right_size, &tmp_state, 1, MPI_INT, MPI_SUM, comm);
     MPI_Allgather(&tmp_state, 1, MPI_INT, prefix_right, 1, MPI_INT, comm);
-    
-    // printf("rank %d received right size!\n", rank);
-    // if (rank == 0) {
-    //     printf("prefix sum of right size: ");
-    //     for (int i = 0; i < p; i++) {
-    //         printf("%d ", prefix_right[i]);
-    //     }
-    //     printf("\n\n");
-    // }
     
     // split communicator for left and right array
     int left_num = prefix_left[p - 1];
@@ -273,18 +232,6 @@ int quicksort(std::vector<int> &arr, int subsize, int n, MPI_Comm comm) {
     send_recv_matrix(small_sCount, small_rCount, prefix_left, newSmLen, comm);
     send_recv_matrix(sCount, rCount, prefix_right, newLgLen, comm);
 
-    // printf("rank %d sCount: ", rank);
-    // for (int i = 0; i < p; i++) {
-    //     printf("%d ", sCount[i]);
-    // }
-    // printf("\n\n");
-
-    // printf("rank %d small sCount: ", rank);
-    // for (int i = 0; i < p; i++) {
-    //     printf("%d ", small_sCount[i]);
-    // }
-    // printf("\n\n");
-
     // Combine send and receive counts for small and large cases
     for (int i = 0; i < p; i++) {
         sCount[i] += small_sCount[i];
@@ -292,14 +239,14 @@ int quicksort(std::vector<int> &arr, int subsize, int n, MPI_Comm comm) {
     }
 
     // Get displacements array
-    int sDispl[p] = {0};
-    int rDispl[p] = {0};
+    int sDispl[p];
+    std::fill_n(sDispl, p, 0); 
+    int rDispl[p];
+    std::fill_n(rDispl, p, 0); 
     for (int i = 1; i < p; i++) {
         sDispl[i] = sDispl[i - 1] + sCount[i - 1];
         rDispl[i] = rDispl[i - 1] + rCount[i - 1];
     }
-
-    printf("After computing displs\n\n");
 
     // Alltoall data transfer
     int tempData[newLen];
@@ -310,12 +257,6 @@ int quicksort(std::vector<int> &arr, int subsize, int n, MPI_Comm comm) {
     for (int i = 0; i < newLen; i++) {
         arr[i] = tempData[i];
     }
-
-    // printf("rank %d during recursion: ", rank);
-    // for (int i = 0; i < newLen; i++) {
-    //     printf("%d ", arr[i]);
-    // }
-    // printf("\n\n");
 
     // Split communicators
     MPI_Comm newComm;
@@ -438,26 +379,6 @@ int main(int argc, char *argv[]){
 
     MPI_Barrier(MPI_COMM_WORLD);
 
-    printf("rank %d after recursion with newL %d: \n", world_rank, newL);
-    for (int i = 0; i < newL; i++) {
-        printf("%d ", subarr[i]);
-    }
-    printf("\n\n");
-
-    // int newLen;
-    // newLen = world_rank + 1;
-    // int arrTest[newLen];
-    // printf("number of Pro: %d\n",world_size);
-    // for (int i = 0; i < newLen; i++) {
-    //      arrTest[i] = world_size * world_rank + i;
-    // }
-    // printf("len of rank # %d #arrTest: %d\n",world_rank,subLen);
-    // //double totaltime;
-    // printf("rank%d-newLen-%d \n", world_rank, newLen);
-    // for (int i = 0; i < newLen; i++) {
-    //     printf("rank-%d:%d##### %d \n", world_rank, i, arrTest[i]);
-    // }
-
     double totaltime;
     if (world_rank == 0){totaltime = MPI_Wtime() - start;}  
     std::vector<int> sortedArray;
@@ -484,7 +405,6 @@ int main(int argc, char *argv[]){
       printf("Output created\n");
     }
 
-    
     // Finalize the MPI environment. No more MPI calls can be made after this
     MPI_Finalize();
     return 0;
