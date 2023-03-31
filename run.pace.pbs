@@ -1,6 +1,7 @@
-#PBS -N HW02
+#!/bin/bash
+#PBS -N PA02
 #PBS -l nodes=1:ppn=16
-#PBS -l walltime=5:00
+#PBS -l walltime=00:15:00
 #PBS -q coc-ice
 #PBS -oe result.out
 
@@ -8,17 +9,11 @@ cd $PBS_O_WORKDIR
 module purge 
 module load gcc
 module load mvapich2/2.3.2
+module load python
 
 make clean
 make
 
-export Insub="input_"
-export Outsub="output_"
-export Endsub=".txt"
-for p in {5..7}; do
-  for n in 8 20; do
-    inFile="${Insub}${n}${Endsub}"
-    outFile="${Outsub}${n}_${p}${Endsub}"
-    mpirun -np ${p} ./pqsort "${inFile}" "${outFile}"
-  done
+for p in {1..16..1}; do
+    python3 performance_test.py ${p}
 done
