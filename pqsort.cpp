@@ -354,9 +354,8 @@ int main(int argc, char *argv[]){
       myfile << "\n";
       myfile << std::fixed;
       myfile << std::setprecision(6);
-      myfile <<  totaltime <<std::endl;
+      myfile <<  totaltime * 1000 <<std::endl;
       myfile.close();
-      printf("Output created\n");
     }
 
     // Finalize the MPI environment. No more MPI calls can be made after this
